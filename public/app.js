@@ -31,7 +31,7 @@
   const cloudModels = {
     openai: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo'],
     anthropic: ['claude-3-5-sonnet-20240620', 'claude-3-opus-20240229', 'claude-3-haiku-20240307'],
-    gemini: ['gemini-1.5-pro', 'gemini-1.5-flash']
+    gemini: ['gemini-2.5-pro', 'gemini-2.5-flash']
   };
 
   const TOP_PICK_THRESHOLD = 8.0;
