@@ -739,7 +739,7 @@ app.get('/api/settings', async (_req, res) => {
     } catch {
       // LM Studio not reachable
     }
-  } else {
+  } else if (settings.provider === 'ollama') {
     // Ollama
     try {
       const response = await fetch(`${settings.ollamaUrl}/api/tags`, { signal: AbortSignal.timeout(3000) });
@@ -775,6 +775,9 @@ app.get('/api/settings', async (_req, res) => {
     } catch {
       // Ollama not reachable
     }
+  } else {
+    // Cloud Providers (OpenAI, Anthropic, Gemini)
+    aiOnline = true;
   }
 
   res.json({
