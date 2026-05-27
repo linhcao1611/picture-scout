@@ -181,6 +181,7 @@ async function analyzeWithOllama(base64Image, model) {
       options: {
         temperature: 0.3,
         num_predict: 2048,
+        num_ctx: 2048,
       },
     }),
   });
