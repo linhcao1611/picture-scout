@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Picture Scout — AI Photo Curation</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="index.css" />
+</head>
+<body>
+
+  <!-- ═══════════════════ HEADER ═══════════════════ -->
+  <header id="app-header">
+    <div class="header-left">
+      <div class="logo">
+        <svg class="logo-icon" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="2" y="2" width="24" height="24" rx="6" stroke="url(#logo-grad)" stroke-width="2"/>
+          <circle cx="10" cy="10" r="2.5" fill="url(#logo-grad)"/>
+          <path d="M4 20l6-8 4 5 3-3 7 6" stroke="url(#logo-grad)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          <defs>
+            <linearGradient id="logo-grad" x1="0" y1="0" x2="28" y2="28">
+              <stop stop-color="#8b5cf6"/>
+              <stop offset="1" stop-color="#06b6d4"/>
+            </linearGradient>
+          </defs>
+        </svg>
+        <h1 class="logo-text">Picture Scout</h1>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="connection-status" id="connection-status" title="Ollama connection status">
+        <span class="status-dot"></span>
+        <span class="status-label">Checking…</span>
+      </div>
+      <button class="icon-btn" id="settings-btn" title="Settings" aria-label="Open settings">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- ═══════════════════ MAIN ═══════════════════ -->
+  <main id="app-main">
+
+    <!-- Folder Input Section -->
+    <section id="folder-section">
+      <div class="folder-input-group">
+        <div class="input-wrapper">
+          <svg class="input-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/>
+          </svg>
+          <input
+            type="text"
+            id="folder-input"
+            placeholder="Enter folder path to scan for images…"
+            autocomplete="off"
+            spellcheck="false"
+          />
+        </div>
+        <button class="btn btn-primary" id="scan-btn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"/>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          Scan
+        </button>
+        <button class="btn btn-accent" id="analyze-all-btn" disabled>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+          </svg>
+          Analyze All
+        </button>
+      </div>
+    </section>
+
+    <!-- Toolbar -->
+    <section id="toolbar" class="hidden">
+      <div class="toolbar-left">
+        <div class="toolbar-control">
+          <label for="sort-select">Sort</label>
+          <select id="sort-select">
+            <option value="score-desc">Score ↓</option>
+            <option value="score-asc">Score ↑</option>
+            <option value="date">Date</option>
+            <option value="name">Name</option>
+          </select>
+        </div>
+        <div class="toolbar-control">
+          <label for="min-score-slider">Min Score: <span id="min-score-value">0</span></label>
+          <input type="range" id="min-score-slider" min="0" max="10" step="0.5" value="0" />
+        </div>
+        <div class="toolbar-control">
+          <label class="toggle-label" for="top-picks-toggle">
+            <input type="checkbox" id="top-picks-toggle" />
+            <span class="toggle-switch"></span>
+            Top Picks Only
+          </label>
+        </div>
+      </div>
+      <div class="toolbar-right">
+        <span class="result-count" id="result-count">0 images</span>
+      </div>
+    </section>
+
+    <!-- Progress Section -->
+    <section id="progress-section" class="hidden">
+      <div class="progress-header">
+        <span class="progress-label" id="progress-label">Analyzing images…</span>
+        <span class="progress-percent" id="progress-percent">0%</span>
+      </div>
+      <div class="progress-bar-track">
+        <div class="progress-bar-fill" id="progress-bar-fill"></div>
+      </div>
+      <p class="progress-status" id="progress-status">Preparing…</p>
+    </section>
+
+    <!-- Gallery Grid -->
+    <section id="gallery"></section>
+
+    <!-- Empty State -->
+    <section id="empty-state" class="hidden">
+      <div class="empty-state-content">
+        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="empty-icon">
+          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+          <circle cx="8.5" cy="8.5" r="1.5"/>
+          <polyline points="21 15 16 10 5 21"/>
+        </svg>
+        <h3>No images found</h3>
+        <p>Enter a folder path above and click <strong>Scan</strong> to discover images.</p>
+      </div>
+    </section>
+
+    <!-- Detail Panel -->
+    <aside id="detail-panel" class="hidden">
+      <div class="detail-backdrop" id="detail-backdrop"></div>
+      <div class="detail-content">
+        <div class="detail-header">
+          <h2 class="detail-title" id="detail-filename">—</h2>
+          <button class="icon-btn detail-close-btn" id="detail-close-btn" aria-label="Close detail panel">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"/>
+              <line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
+
+        <div class="detail-image-wrapper">
+          <img id="detail-image" src="" alt="Selected photo preview" />
+        </div>
+
+        <div class="detail-meta" id="detail-meta">
+          <span class="meta-item" id="detail-size">—</span>
+          <span class="meta-item" id="detail-dimensions">—</span>
+          <span class="meta-item" id="detail-date">—</span>
+        </div>
+
+        <div class="detail-score-section" id="detail-score-section">
+          <div class="detail-overall-score">
+            <div class="detail-stars" id="detail-stars"></div>
+            <span class="detail-score-value" id="detail-score-value">—</span>
+          </div>
+          <div class="detail-breakdown" id="detail-breakdown"></div>
+        </div>
+
+        <div class="detail-feedback" id="detail-feedback-section">
+          <h4>AI Feedback</h4>
+          <p id="detail-feedback">No analysis yet. Click "Analyze" on the image card.</p>
+        </div>
+
+        <div class="detail-tags" id="detail-tags-section">
+          <h4>Tags</h4>
+          <div class="tags-list" id="detail-tags"></div>
+        </div>
+
+        <div class="detail-nav">
+          <button class="btn btn-ghost" id="detail-prev-btn" aria-label="Previous image">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+            Prev
+          </button>
+          <button class="btn btn-ghost" id="detail-next-btn" aria-label="Next image">
+            Next
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+          </button>
+        </div>
+      </div>
+    </aside>
+
+  </main>
+
+  <!-- ═══════════════════ SETTINGS MODAL ═══════════════════ -->
+  <div id="settings-modal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2>Settings</h2>
+        <button class="icon-btn" id="settings-close-btn" aria-label="Close settings">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="setting-model">Ollama Model</label>
+          <input type="text" id="setting-model" value="gemma4:e4b" spellcheck="false" />
+          <p class="form-hint">The vision model to use for image analysis.</p>
+        </div>
+        <div class="form-group">
+          <label for="setting-thumb-size">Thumbnail Size (px)</label>
+          <input type="number" id="setting-thumb-size" value="300" min="100" max="800" step="50" />
+          <p class="form-hint">Width of generated thumbnail images.</p>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" id="settings-cancel-btn">Cancel</button>
+        <button class="btn btn-primary" id="settings-save-btn">Save Settings</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════ TOAST CONTAINER ═══════════════════ -->
+  <div id="toast-container"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

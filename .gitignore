@@ -1,0 +1,4 @@
+node_modules/
+.DS_Store
+.picture-scout-cache.json
+*.log
