@@ -17,7 +17,7 @@ let settings = {
   provider: 'ollama', // 'ollama' | 'lmstudio'
   ollamaUrl: 'http://localhost:11434',
   lmStudioUrl: 'http://localhost:1234/v1',
-  model: 'llama3.2-vision',
+  model: 'moondream:latest',
   thumbnailSize: 300,
 };
 
@@ -50,29 +50,29 @@ async function detectBestModel() {
         
         // If the current model isn't available, check for alternatives
         if (models.length > 0 && !models.includes(settings.model)) {
-          // 1. Look for llama3.2-vision
-          if (models.includes('llama3.2-vision')) {
-            console.log(`[Model Auto-Detect] Configured model "${settings.model}" not found. Auto-switching to "llama3.2-vision".`);
-            settings.model = 'llama3.2-vision';
+          // 1. Look for moondream:latest
+          if (models.includes('moondream:latest')) {
+            console.log(`[Model Auto-Detect] Configured model "${settings.model}" not found. Auto-switching to "moondream:latest".`);
+            settings.model = 'moondream:latest';
           } 
-          // 2. Look for any llama3.2-vision model
+          // 2. Look for any moondream model
           else {
-            const llamaVisionModel = models.find(m => m.startsWith('llama3.2-vision'));
-            if (llamaVisionModel) {
-              console.log(`[Model Auto-Detect] Configured model "${settings.model}" not found. Auto-switching to available llama3.2-vision model "${llamaVisionModel}".`);
-              settings.model = llamaVisionModel;
+            const moondreamModel = models.find(m => m.startsWith('moondream'));
+            if (moondreamModel) {
+              console.log(`[Model Auto-Detect] Configured model "${settings.model}" not found. Auto-switching to available moondream model "${moondreamModel}".`);
+              settings.model = moondreamModel;
             }
-            // 3. Look for gemma4:latest
-            else if (models.includes('gemma4:latest')) {
-              console.log(`[Model Auto-Detect] Configured model "${settings.model}" not found. Auto-switching to "gemma4:latest".`);
-              settings.model = 'gemma4:latest';
+            // 3. Look for llama3.2-vision
+            else if (models.includes('llama3.2-vision')) {
+              console.log(`[Model Auto-Detect] Configured model "${settings.model}" not found. Auto-switching to "llama3.2-vision".`);
+              settings.model = 'llama3.2-vision';
             } 
-            // 4. Look for any gemma4 model
+            // 4. Look for any llama3.2-vision model
             else {
-              const gemmaModel = models.find(m => m.startsWith('gemma4'));
-              if (gemmaModel) {
-                console.log(`[Model Auto-Detect] Configured model "${settings.model}" not found. Auto-switching to available gemma4 model "${gemmaModel}".`);
-                settings.model = gemmaModel;
+              const llamaVisionModel = models.find(m => m.startsWith('llama3.2-vision'));
+              if (llamaVisionModel) {
+                console.log(`[Model Auto-Detect] Configured model "${settings.model}" not found. Auto-switching to available llama3.2-vision model "${llamaVisionModel}".`);
+                settings.model = llamaVisionModel;
               }
               // 5. Look for any non-embedding model
               else {
@@ -593,18 +593,18 @@ app.get('/api/settings', async (_req, res) => {
         
         // Auto-detect and align configured model with what is actually available in Ollama
         if (availableModels.length > 0 && !availableModels.includes(settings.model)) {
-          if (availableModels.includes('llama3.2-vision')) {
-            settings.model = 'llama3.2-vision';
+          if (availableModels.includes('moondream:latest')) {
+            settings.model = 'moondream:latest';
           } else {
-            const llamaVisionModel = availableModels.find(m => m.startsWith('llama3.2-vision'));
-            if (llamaVisionModel) {
-              settings.model = llamaVisionModel;
-            } else if (availableModels.includes('gemma4:latest')) {
-              settings.model = 'gemma4:latest';
+            const moondreamModel = availableModels.find(m => m.startsWith('moondream'));
+            if (moondreamModel) {
+              settings.model = moondreamModel;
+            } else if (availableModels.includes('llama3.2-vision')) {
+              settings.model = 'llama3.2-vision';
             } else {
-              const gemmaModel = availableModels.find(m => m.startsWith('gemma4'));
-              if (gemmaModel) {
-                settings.model = gemmaModel;
+              const llamaVisionModel = availableModels.find(m => m.startsWith('llama3.2-vision'));
+              if (llamaVisionModel) {
+                settings.model = llamaVisionModel;
               } else {
                 const nonEmbedModel = availableModels.find(m => !m.includes('embed'));
                 if (nonEmbedModel) {
@@ -712,4 +712,4 @@ app.listen(PORT, async () => {
   console.log('  └──────────────────────────────────────────┘');
   console.log('');
 });
-// Trigger reload after downloading llama3.2-vision
+// Trigger reload after prioritizing moondream

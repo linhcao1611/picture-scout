@@ -2,7 +2,7 @@
 
 Picture Scout is a premium, **100% local AI-powered photo curation application** designed to help photographers and hobbyists quickly scout, grade, and curate top picks from their photo folders. 
 
-Powered by Meta's **Llama 3.2 Vision** model running locally via **Ollama**, and built with a gorgeous **dark glassmorphism design system** in Vanilla CSS/JS. No data ever leaves your computer, and no paid APIs are required.
+Powered by **Moondream** (or Llama 3.2 Vision) running locally via **Ollama**, and built with a gorgeous **dark glassmorphism design system** in Vanilla CSS/JS. No data ever leaves your computer, and no paid APIs are required.
 
 ---
 
@@ -24,7 +24,7 @@ Powered by Meta's **Llama 3.2 Vision** model running locally via **Ollama**, and
 - **Frontend**: Vanilla HTML5, CSS3 (Glassmorphism layout, smooth CSS animations), Vanilla JavaScript (no framework overhead).
 - **Backend**: Node.js, Express.js.
 - **Image Processing**: Sharp (resizes images down to 512px before sending to the model to save VRAM and achieve 4x faster execution).
-- **AI Engine**: Ollama (configured to run Meta's `llama3.2-vision` locally with a large 2048 context budget to allow full reasoning/thinking cycles).
+- **AI Engine**: Ollama (defaulted to run the lightweight `moondream:latest` locally for instant 100% GPU processing, or `llama3.2-vision` for advanced high-end curation).
 
 ---
 
@@ -32,9 +32,9 @@ Powered by Meta's **Llama 3.2 Vision** model running locally via **Ollama**, and
 
 ### 1. Prerequisites
 - Install [Ollama](https://ollama.com).
-- Download Llama 3.2 Vision (Meta/Facebook's vision model, approx. 11B parameters):
+- Download Moondream (ultra-lightweight vision model, fits entirely in GPU VRAM):
   ```bash
-  ollama pull llama3.2-vision
+  ollama pull moondream:latest
   ```
 - Make sure Ollama is running (`ollama serve`).
 

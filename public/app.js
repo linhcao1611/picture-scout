@@ -18,7 +18,7 @@
       provider: 'ollama',
       ollamaUrl: 'http://localhost:11434',
       lmStudioUrl: 'http://localhost:1234/v1',
-      model: 'llama3.2-vision',
+      model: 'moondream:latest',
       thumbnailSize: 300,
     },
     availableModels: [],      // available models from Ollama
@@ -154,7 +154,7 @@
       state.settings.provider = data.provider || 'ollama';
       state.settings.ollamaUrl = data.ollamaUrl || 'http://localhost:11434';
       state.settings.lmStudioUrl = data.lmStudioUrl || 'http://localhost:1234/v1';
-      state.settings.model = data.model || 'llama3.2-vision';
+      state.settings.model = data.model || 'moondream:latest';
       state.settings.thumbnailSize = data.thumbnailSize || 300;
 
       const providerLabel = state.settings.provider === 'lmstudio' ? 'LM Studio' : 'Ollama';
@@ -842,7 +842,7 @@
     state.settings.provider = dom.settingProvider.value;
     state.settings.ollamaUrl = dom.settingOllamaUrl.value.trim() || 'http://localhost:11434';
     state.settings.lmStudioUrl = dom.settingLmStudioUrl.value.trim() || 'http://localhost:1234/v1';
-    state.settings.model = chosenModel || 'llama3.2-vision';
+    state.settings.model = chosenModel || 'moondream:latest';
     state.settings.thumbnailSize = parseInt(dom.settingThumbSize.value, 10) || 300;
 
     try {
