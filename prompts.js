@@ -1,38 +1,41 @@
 /**
  * Centralized AI prompt templates for Picture Scout.
- * Designed to work with lightweight vision models (Moondream, etc.) as well as
- * larger models (Llama 3.2 Vision, Gemma 4).
- *
- * Key design decisions:
- * - No system prompt (small models ignore or mishandle them).
- * - Single concise user prompt with the image.
- * - JSON example uses EMPTY placeholder values so the model doesn't parrot them.
- * - Scoring guidance is brief and embedded directly in the user message.
+ * These prompts are designed for capable vision models (Gemma 4, Llama 3.2 Vision)
+ * that can follow detailed rubrics and produce nuanced, varied scores.
  */
 
-// Small models tend to ignore system prompts entirely, so we keep it minimal.
-// The real instructions go into the user prompt alongside the image.
-export const ANALYSIS_SYSTEM_PROMPT = `You are a professional photography judge. Respond ONLY with a JSON object.`;
+export const ANALYSIS_SYSTEM_PROMPT = `You are a highly critical, elite professional photographer, chief photo editor, and contest judge. Your job is to curate, grade, and pick only the absolute best photographs.
 
-export const ANALYSIS_USER_PROMPT = `Rate this photograph as a strict professional photography judge.
+You must judge photographs with extreme scrutiny and strict professional standards. You MUST NOT give similar scores to every image. A successful professional curation requires a clear hierarchy—separate average snapshots from masterpieces.
 
-SCORING GUIDE (1-10 scale):
-- 1-2: Blurry, out of focus, or technically broken
-- 3-4: Poor composition, bad lighting, amateur snapshot
-- 5-6: Average photo, acceptable but uninteresting
-- 7-8: Good photo with strong composition and lighting
-- 9-10: Exceptional, portfolio-worthy photograph
+CRITICAL EVALUATION CRITERIA:
+1. Composition (Rule of thirds, framing, depth, balance, leading lines, distractions).
+   - Deduct heavily for centered subjects without artistic reason, cut-off body parts/limbs, distracting objects in backgrounds, tilted horizons, or flat framing.
+2. Lighting & Exposure (Contrast, highlights, shadow detail, light direction, dynamic range, mood).
+   - Deduct heavily for flat, boring overcast lighting, harsh overexposed highlights (blown skies/skin), muddy shadows with zero detail, or direct unartistic flash.
+3. Color & White Balance (Tone, color harmony, saturation, color grading, skin tones).
+   - Deduct heavily for sickly green/orange white balance casts, oversaturated garish tones, muddy/flat color palettes, or mismatched background tones.
+4. Sharpness & Technicals (Misfocus, motion blur, depth of field, noise, digital artifacts).
+   - Misfocused subjects, soft details, or severe motion blur MUST result in an immediate automatic Technical Score of 1-3. No exceptions.
 
-Be critical. Most everyday photos deserve 3-6. Only truly impressive shots get 7+.
+SCORING RULES (Use the entire 1-10 scale strictly):
+- 1-2 (Technical Fail): Out of focus, severe camera shake, accidental framing, completely black or blown white.
+- 3-4 (Subpar / Amateur Snapshot): Tilted horizon, flat boring lighting, messy background clutter, soft focus.
+- 5-6 (Average / Competent): Technically acceptable, sharp, and properly exposed, but lacks a creative concept, unique angle, or emotional impact. Typical of everyday travel snaps or raw phone snapshots.
+- 7 (Professional Entry): Strong execution, clean composition, nice lighting, clear visual story, minor flaws.
+- 8-9 (Exceptional Portfolio Grade): Stunning artistic intent, beautiful golden hour or high-contrast studio light, perfect color harmony, instantly holds the viewer's attention.
+- 10 (Masterpiece): Gallery-level work. Flawless execution, extraordinary rare timing, immense emotional power. (Reserve this for less than 1% of images).
 
-Respond with ONLY this JSON (fill in real values, no placeholders):
-{"score":0,"composition":0,"lighting":0,"color":0,"sharpness":0,"subject":"","tags":[],"feedback":""}
+Your overall "score" should reflect this strict curation philosophy—do not mathematically average the categories. A technically sharp snap with bad composition is still a subpar photo (3-4).`;
 
-Rules for the JSON:
-- score/composition/lighting/color/sharpness: integers 1 to 10
-- subject: brief 2-5 word description of what is in the photo
-- tags: 2-4 short lowercase tags
-- feedback: one sentence about the biggest strength or weakness`;
+export const ANALYSIS_USER_PROMPT = `As an elite photography judge, analyze this photograph with strict professional standards. 
+
+Identify clear flaws in composition, lighting, focus, or color. If it looks like a standard snapshot with no creative concept, grade it strictly as a 5 or lower. If there is clear technical failure (motion blur, soft focus), fail it as a 3 or lower. Only give 7+ to outstanding artistic achievements.
+
+You MUST respond with ONLY a JSON object. No explanation text before or after. Fill ALL fields with your real assessment:
+{"score":0,"composition":0,"lighting":0,"color":0,"sharpness":0,"subject":"describe the subject in 2-5 words","tags":["tag1","tag2","tag3"],"feedback":"One critical sentence about the biggest strength or flaw."}
+
+All numeric fields must be integers from 1 to 10. Do NOT leave any field as 0.`;
 
 /**
  * Parse the AI response, handling potential quirks in model output.
@@ -100,7 +103,7 @@ export function parseAnalysisResponse(raw) {
   // Validate and clamp scores (handling floats/10-scale conversions)
   const clamp = (v) => {
     let num = Number(v);
-    if (isNaN(num)) return null; // Return null instead of defaulting to 5
+    if (isNaN(num)) return 5;
     if (num > 0 && num <= 1) num = num * 10; // Convert 0.8 to 8
     return Math.max(1, Math.min(10, Math.round(num)));
   };
@@ -110,32 +113,12 @@ export function parseAnalysisResponse(raw) {
     return null;
   }
 
-  // Compute a derived overall score if individual category scores exist but overall is missing/zero
-  const clamped = {
-    composition: clamp(parsed.composition),
-    lighting: clamp(parsed.lighting),
-    color: clamp(parsed.color),
-    sharpness: clamp(parsed.sharpness),
-  };
-
-  let overallScore = clamp(parsed.score);
-
-  // If the model returned 0 or null for overall score but gave category scores, derive it
-  if (!overallScore || overallScore === 0) {
-    const catScores = Object.values(clamped).filter(v => v !== null);
-    if (catScores.length > 0) {
-      overallScore = Math.round(catScores.reduce((a, b) => a + b, 0) / catScores.length);
-    } else {
-      overallScore = 5;
-    }
-  }
-
   return {
-    score: overallScore,
-    composition: clamped.composition ?? overallScore,
-    lighting: clamped.lighting ?? overallScore,
-    color: clamped.color ?? overallScore,
-    sharpness: clamped.sharpness ?? overallScore,
+    score: clamp(parsed.score ?? 5),
+    composition: clamp(parsed.composition ?? 5),
+    lighting: clamp(parsed.lighting ?? 5),
+    color: clamp(parsed.color ?? 5),
+    sharpness: clamp(parsed.sharpness ?? 5),
     subject: String(parsed.subject || 'Unknown').replace(/\\"/g, '"').slice(0, 100) || 'Unknown',
     tags: Array.isArray(parsed.tags)
       ? parsed.tags.map(t => String(t).slice(0, 30)).slice(0, 8)

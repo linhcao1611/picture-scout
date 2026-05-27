@@ -15,10 +15,10 @@
     analyzing: false,
     selectedIndex: -1,        // index in filteredImages
     settings: {
-      provider: 'ollama',
+      provider: 'lmstudio',
       ollamaUrl: 'http://localhost:11434',
       lmStudioUrl: 'http://localhost:1234/v1',
-      model: 'moondream:latest',
+      model: 'gemma-4',
       thumbnailSize: 300,
     },
     availableModels: [],      // available models from Ollama
@@ -154,7 +154,7 @@
       state.settings.provider = data.provider || 'ollama';
       state.settings.ollamaUrl = data.ollamaUrl || 'http://localhost:11434';
       state.settings.lmStudioUrl = data.lmStudioUrl || 'http://localhost:1234/v1';
-      state.settings.model = data.model || 'moondream:latest';
+      state.settings.model = data.model || 'gemma-4';
       state.settings.thumbnailSize = data.thumbnailSize || 300;
 
       const providerLabel = state.settings.provider === 'lmstudio' ? 'LM Studio' : 'Ollama';
@@ -842,7 +842,7 @@
     state.settings.provider = dom.settingProvider.value;
     state.settings.ollamaUrl = dom.settingOllamaUrl.value.trim() || 'http://localhost:11434';
     state.settings.lmStudioUrl = dom.settingLmStudioUrl.value.trim() || 'http://localhost:1234/v1';
-    state.settings.model = chosenModel || 'moondream:latest';
+    state.settings.model = chosenModel || 'gemma-4';
     state.settings.thumbnailSize = parseInt(dom.settingThumbSize.value, 10) || 300;
 
     try {

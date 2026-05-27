@@ -14,10 +14,10 @@ const MAX_IMAGE_DIMENSION = 512; // Resize images before sending to AI
 
 // Settings (in-memory, persisted on change)
 let settings = {
-  provider: 'ollama', // 'ollama' | 'lmstudio'
+  provider: 'lmstudio', // 'ollama' | 'lmstudio'
   ollamaUrl: 'http://localhost:11434',
   lmStudioUrl: 'http://localhost:1234/v1',
-  model: 'moondream:latest',
+  model: 'gemma-4',
   thumbnailSize: 300,
 };
 
