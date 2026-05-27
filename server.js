@@ -602,7 +602,28 @@ app.get('/api/analyze-all', async (req, res) => {
         send({ type: 'progress', filename: file, progress: analyzed, total, status: 'analyzing' });
 
         const base64 = await imageToBase64(filePath);
-        const analysis = await analyzeWithAI(base64, settings.provider, settings.model);
+        
+        let analysis;
+        let retries = 3;
+        let delay = 2000;
+        
+        while (retries >= 0) {
+          try {
+            analysis = await analyzeWithAI(base64, settings.provider, settings.model);
+            break; // Success
+          } catch (err) {
+            // Check if error is a rate limit (429) or server error (503)
+            if (retries > 0 && (err.message.includes('(429)') || err.message.includes('(503)') || err.message.includes('429 Too Many Requests'))) {
+              console.log(`[Rate Limit] Hit limit, retrying in ${delay/1000}s... (${retries} retries left)`);
+              send({ type: 'progress', filename: file, progress: analyzed, total, status: 'rate limited, waiting...' });
+              await new Promise(r => setTimeout(r, delay));
+              delay *= 2; // Exponential backoff
+              retries--;
+            } else {
+              throw err;
+            }
+          }
+        }
 
         // Cache immediately
         cache[file] = analysis;
