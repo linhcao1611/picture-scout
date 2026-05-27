@@ -229,9 +229,18 @@
 
   // Check connection dynamically when provider changes in Settings Modal
   async function checkConnectionForProvider(provider) {
+    let tempModel = state.settings.model;
+    
+    // Auto-switch to a valid model if changing to a cloud provider
+    if (cloudModels[provider] && !cloudModels[provider].includes(tempModel)) {
+      tempModel = cloudModels[provider][0];
+      state.settings.model = tempModel;
+    }
+
     const tempSettings = {
       ...state.settings,
       provider: provider,
+      model: tempModel,
       ollamaUrl: dom.settingOllamaUrl.value.trim(),
       lmStudioUrl: dom.settingLmStudioUrl.value.trim(),
       openaiKey: dom.settingOpenaiKey.value.trim(),

@@ -376,30 +376,12 @@ async function analyzeWithAnthropic(base64Image, model) {
  * Uses API key if provided, otherwise falls back to Application Default Credentials.
  */
 async function analyzeWithGemini(base64Image, model) {
+  if (!settings.geminiKey) throw new Error("Google Gemini API key is required");
   console.log(`[Gemini] Sending image using model "${model}"...`);
   const startTime = Date.now();
   
-  let url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+  let url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${settings.geminiKey}`;
   let headers = { 'Content-Type': 'application/json' };
-  
-  if (settings.geminiKey) {
-    // Explicit API Key provided
-    url += `?key=${settings.geminiKey}`;
-  } else {
-    // Fallback to ADC using google-auth-library
-    console.log('[Gemini] No API key provided, attempting Google Application Default Credentials login...');
-    try {
-      const auth = new GoogleAuth({
-        scopes: 'https://www.googleapis.com/auth/generative-language.retriever'
-      });
-      const client = await auth.getClient();
-      const token = await client.getAccessToken();
-      if (!token.token) throw new Error('Failed to retrieve access token from GoogleAuth');
-      headers['Authorization'] = `Bearer ${token.token}`;
-    } catch (authErr) {
-      throw new Error('No Gemini API key provided, and failed to login via Google ADC: ' + authErr.message);
-    }
-  }
   
   const response = await fetch(url, {
     method: 'POST',
