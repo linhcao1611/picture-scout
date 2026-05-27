@@ -74,6 +74,13 @@
           </svg>
           Analyze All
         </button>
+        <button class="btn btn-ghost" id="clear-cache-btn" style="border-color: rgba(239, 68, 68, 0.4); color: var(--accent-red);" disabled>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="3 6 5 6 21 6"/>
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+          </svg>
+          Reset Cache
+        </button>
       </div>
     </section>
 
@@ -205,9 +212,28 @@
       </div>
       <div class="modal-body">
         <div class="form-group">
-          <label for="setting-model">Ollama Model</label>
-          <input type="text" id="setting-model" value="gemma4:e4b" spellcheck="false" />
-          <p class="form-hint">The vision model to use for image analysis.</p>
+          <label for="setting-provider">API Provider</label>
+          <select id="setting-provider">
+            <option value="ollama">Ollama</option>
+            <option value="lmstudio">LM Studio (OpenAI Compatible)</option>
+          </select>
+          <p class="form-hint">Select the local platform hosting your vision model.</p>
+        </div>
+        <div class="form-group" id="setting-ollama-url-container">
+          <label for="setting-ollama-url">Ollama Server URL</label>
+          <input type="text" id="setting-ollama-url" value="http://localhost:11434" placeholder="http://localhost:11434" spellcheck="false" />
+        </div>
+        <div class="form-group hidden" id="setting-lmstudio-url-container">
+          <label for="setting-lmstudio-url">LM Studio Server URL</label>
+          <input type="text" id="setting-lmstudio-url" value="http://localhost:1234/v1" placeholder="http://localhost:1234/v1" spellcheck="false" />
+        </div>
+        <div class="form-group">
+          <label for="setting-model" id="setting-model-label">Model</label>
+          <select id="setting-model"></select>
+          <div id="setting-model-custom-container" class="hidden" style="margin-top: 8px;">
+            <input type="text" id="setting-model-custom" placeholder="Enter custom model name..." spellcheck="false" />
+          </div>
+          <p class="form-hint" id="setting-model-hint">The vision model to use for image analysis.</p>
         </div>
         <div class="form-group">
           <label for="setting-thumb-size">Thumbnail Size (px)</label>

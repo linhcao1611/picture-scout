@@ -15,9 +15,13 @@
     analyzing: false,
     selectedIndex: -1,        // index in filteredImages
     settings: {
-      model: 'gemma4:e4b',
+      provider: 'ollama',
+      ollamaUrl: 'http://localhost:11434',
+      lmStudioUrl: 'http://localhost:1234/v1',
+      model: 'llama3.2-vision',
       thumbnailSize: 300,
     },
+    availableModels: [],      // available models from Ollama
   };
 
   const TOP_PICK_THRESHOLD = 8.0;
@@ -33,6 +37,7 @@
     folderInput: $('#folder-input'),
     scanBtn: $('#scan-btn'),
     analyzeAllBtn: $('#analyze-all-btn'),
+    clearCacheBtn: $('#clear-cache-btn'),
     toolbar: $('#toolbar'),
     sortSelect: $('#sort-select'),
     minScoreSlider: $('#min-score-slider'),
@@ -68,7 +73,16 @@
     settingsCloseBtn: $('#settings-close-btn'),
     settingsCancelBtn: $('#settings-cancel-btn'),
     settingsSaveBtn: $('#settings-save-btn'),
+    settingProvider: $('#setting-provider'),
+    settingOllamaUrl: $('#setting-ollama-url'),
+    settingLmStudioUrl: $('#setting-lmstudio-url'),
+    settingOllamaUrlContainer: $('#setting-ollama-url-container'),
+    settingLmStudioUrlContainer: $('#setting-lmstudio-url-container'),
+    settingModelLabel: $('#setting-model-label'),
+    settingModelHint: $('#setting-model-hint'),
     settingModel: $('#setting-model'),
+    settingModelCustom: $('#setting-model-custom'),
+    settingModelCustomContainer: $('#setting-model-custom-container'),
     settingThumbSize: $('#setting-thumb-size'),
     toastContainer: $('#toast-container'),
   };
@@ -91,6 +105,7 @@
       if (e.key === 'Enter') scanFolder();
     });
     dom.analyzeAllBtn.addEventListener('click', analyzeAll);
+    dom.clearCacheBtn.addEventListener('click', clearCache);
 
     dom.sortSelect.addEventListener('change', () => updateSort(dom.sortSelect.value));
     dom.minScoreSlider.addEventListener('input', () => {
@@ -104,6 +119,18 @@
     dom.settingsCloseBtn.addEventListener('click', hideSettings);
     dom.settingsCancelBtn.addEventListener('click', hideSettings);
     dom.settingsSaveBtn.addEventListener('click', saveSettings);
+    dom.settingProvider.addEventListener('change', () => {
+      syncProviderFields(dom.settingProvider.value);
+      checkConnectionForProvider(dom.settingProvider.value);
+    });
+    dom.settingModel.addEventListener('change', () => {
+      if (dom.settingModel.value === '__custom__') {
+        dom.settingModelCustomContainer.classList.remove('hidden');
+        dom.settingModelCustom.focus();
+      } else {
+        dom.settingModelCustomContainer.classList.add('hidden');
+      }
+    });
 
     dom.detailCloseBtn.addEventListener('click', hideDetail);
     dom.detailBackdrop.addEventListener('click', hideDetail);
@@ -122,16 +149,104 @@
       const res = await fetch('/api/settings');
       if (!res.ok) throw new Error('bad status');
       const data = await res.json();
+      
+      // Update state settings
+      state.settings.provider = data.provider || 'ollama';
+      state.settings.ollamaUrl = data.ollamaUrl || 'http://localhost:11434';
+      state.settings.lmStudioUrl = data.lmStudioUrl || 'http://localhost:1234/v1';
+      state.settings.model = data.model || 'llama3.2-vision';
+      state.settings.thumbnailSize = data.thumbnailSize || 300;
+
+      const providerLabel = state.settings.provider === 'lmstudio' ? 'LM Studio' : 'Ollama';
+
       if (data.ollamaOnline) {
         dom.connectionStatus.className = 'connection-status online';
-        dom.statusLabel.textContent = 'Ollama Online';
+        dom.statusLabel.textContent = `${providerLabel} Online`;
+        
+        // Sync models
+        state.availableModels = data.availableModels || [];
       } else {
         dom.connectionStatus.className = 'connection-status offline';
-        dom.statusLabel.textContent = 'Ollama Offline';
+        dom.statusLabel.textContent = `${providerLabel} Offline`;
+        state.availableModels = [];
       }
     } catch {
       dom.connectionStatus.className = 'connection-status offline';
       dom.statusLabel.textContent = 'Offline';
+      state.availableModels = [];
+    }
+  }
+
+  // Sync settings UI fields based on provider value
+  function syncProviderFields(provider) {
+    if (provider === 'lmstudio') {
+      dom.settingOllamaUrlContainer.classList.add('hidden');
+      dom.settingLmStudioUrlContainer.classList.remove('hidden');
+      dom.settingModelLabel.textContent = 'LM Studio Model';
+      dom.settingModelHint.textContent = 'The active/loaded vision model in LM Studio.';
+    } else {
+      dom.settingOllamaUrlContainer.classList.remove('hidden');
+      dom.settingLmStudioUrlContainer.classList.add('hidden');
+      dom.settingModelLabel.textContent = 'Ollama Model';
+      dom.settingModelHint.textContent = 'The vision model in Ollama to use for analysis.';
+    }
+  }
+
+  // Check connection dynamically when provider changes in Settings Modal
+  async function checkConnectionForProvider(provider) {
+    const tempSettings = {
+      ...state.settings,
+      provider: provider,
+      ollamaUrl: dom.settingOllamaUrl.value.trim(),
+      lmStudioUrl: dom.settingLmStudioUrl.value.trim(),
+    };
+
+    try {
+      const res = await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(tempSettings),
+      });
+      if (res.ok) {
+        await checkConnection();
+        renderModelSelectOptions();
+      }
+    } catch { /* silent */ }
+  }
+
+  // Render options in model select field
+  function renderModelSelectOptions() {
+    dom.settingModel.innerHTML = '';
+    
+    const models = state.availableModels || [];
+    models.forEach(modelName => {
+      const opt = document.createElement('option');
+      opt.value = modelName;
+      opt.textContent = modelName;
+      dom.settingModel.appendChild(opt);
+    });
+
+    if (state.settings.model && !models.includes(state.settings.model)) {
+      const opt = document.createElement('option');
+      opt.value = state.settings.model;
+      opt.textContent = `${state.settings.model} (Active)`;
+      dom.settingModel.insertBefore(opt, dom.settingModel.firstChild);
+    }
+
+    const customOpt = document.createElement('option');
+    customOpt.value = '__custom__';
+    customOpt.textContent = 'Custom model...';
+    dom.settingModel.appendChild(customOpt);
+
+    dom.settingModel.value = state.settings.model;
+    
+    if (dom.settingModel.value === '__custom__' || dom.settingModel.selectedIndex === -1) {
+      dom.settingModel.value = '__custom__';
+      dom.settingModelCustom.value = state.settings.model;
+      dom.settingModelCustomContainer.classList.remove('hidden');
+    } else {
+      dom.settingModelCustom.value = '';
+      dom.settingModelCustomContainer.classList.add('hidden');
     }
   }
 
@@ -175,6 +290,7 @@
       }));
 
       dom.analyzeAllBtn.disabled = state.images.length === 0;
+      dom.clearCacheBtn.disabled = state.images.length === 0;
       dom.toolbar.classList.remove('hidden');
 
       applyFiltersAndRender();
@@ -305,6 +421,50 @@
     showToast('Batch analysis complete!', 'success');
   }
 
+  async function clearCache() {
+    const folder = state.currentFolder;
+    if (!folder) return;
+
+    if (!confirm('Are you sure you want to clear all curation results and cache for this folder? This cannot be undone.')) {
+      return;
+    }
+
+    dom.clearCacheBtn.disabled = true;
+    dom.clearCacheBtn.textContent = 'Clearing…';
+
+    try {
+      const res = await fetch(`/api/cache?folder=${encodeURIComponent(folder)}`, {
+        method: 'DELETE',
+      });
+
+      if (!res.ok) {
+        throw new Error('Failed to clear cache');
+      }
+
+      showToast('Cache cleared successfully. Reloading folder...', 'success');
+
+      // Clear local scores and analysis state
+      state.images.forEach(img => {
+        img.score = null;
+        img.analysis = null;
+      });
+
+      applyFiltersAndRender();
+      await scanFolder();
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      dom.clearCacheBtn.disabled = false;
+      dom.clearCacheBtn.innerHTML = `
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="3 6 5 6 21 6"/>
+          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+        </svg>
+        Reset Cache
+      `;
+    }
+  }
+
 
   /* ═══════════════════════════════════════════════════════════
      DATA HELPERS
@@ -432,7 +592,7 @@
 
     card.innerHTML = `
       <div class="image-wrapper">
-        <img data-src="${thumbnailUrl(image.path)}" alt="${escapeHtml(image.filename)}" loading="lazy" />
+        <img data-src="${thumbnailUrl(image.path, image.date)}" alt="${escapeHtml(image.filename)}" loading="lazy" />
         ${isTopPick ? '<div class="top-pick-badge">★ Top Pick</div>' : ''}
         <div class="card-overlay">
           <button class="analyze-btn" data-path="${escapeAttr(image.path)}">Analyze</button>
@@ -541,7 +701,7 @@
 
   function populateDetail(image) {
     dom.detailFilename.textContent = image.filename;
-    dom.detailImage.src = fullImageUrl(image.path);
+    dom.detailImage.src = fullImageUrl(image.path, image.date);
     dom.detailImage.alt = image.filename;
 
     // Meta
@@ -658,7 +818,13 @@
      SETTINGS
      ═══════════════════════════════════════════════════════════ */
   function showSettings() {
-    dom.settingModel.value = state.settings.model;
+    dom.settingProvider.value = state.settings.provider || 'ollama';
+    dom.settingOllamaUrl.value = state.settings.ollamaUrl || 'http://localhost:11434';
+    dom.settingLmStudioUrl.value = state.settings.lmStudioUrl || 'http://localhost:1234/v1';
+
+    syncProviderFields(dom.settingProvider.value);
+    renderModelSelectOptions();
+
     dom.settingThumbSize.value = state.settings.thumbnailSize;
     dom.settingsModal.classList.remove('hidden');
   }
@@ -668,7 +834,15 @@
   }
 
   function saveSettings() {
-    state.settings.model = dom.settingModel.value.trim() || 'gemma4:e4b';
+    let chosenModel = dom.settingModel.value;
+    if (chosenModel === '__custom__') {
+      chosenModel = dom.settingModelCustom.value.trim();
+    }
+    
+    state.settings.provider = dom.settingProvider.value;
+    state.settings.ollamaUrl = dom.settingOllamaUrl.value.trim() || 'http://localhost:11434';
+    state.settings.lmStudioUrl = dom.settingLmStudioUrl.value.trim() || 'http://localhost:1234/v1';
+    state.settings.model = chosenModel || 'llama3.2-vision';
     state.settings.thumbnailSize = parseInt(dom.settingThumbSize.value, 10) || 300;
 
     try {
@@ -678,12 +852,15 @@
     hideSettings();
     showToast('Settings saved.', 'success');
 
-    // Push to server
     fetch('/api/settings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(state.settings),
-    }).catch(() => { /* silent */ });
+    })
+    .then(() => {
+      checkConnection();
+    })
+    .catch(() => { /* silent */ });
   }
 
   function loadSettings() {
@@ -811,12 +988,20 @@
   /* ═══════════════════════════════════════════════════════════
      UTILITY FUNCTIONS
      ═══════════════════════════════════════════════════════════ */
-  function thumbnailUrl(path) {
-    return `/api/images?path=${encodeURIComponent(path)}&thumb=1`;
+  function thumbnailUrl(path, modified) {
+    let url = `/api/images?path=${encodeURIComponent(path)}&thumb=1`;
+    if (modified) {
+      url += `&t=${encodeURIComponent(modified)}`;
+    }
+    return url;
   }
 
-  function fullImageUrl(path) {
-    return `/api/images?path=${encodeURIComponent(path)}`;
+  function fullImageUrl(path, modified) {
+    let url = `/api/images?path=${encodeURIComponent(path)}`;
+    if (modified) {
+      url += `&t=${encodeURIComponent(modified)}`;
+    }
+    return url;
   }
 
   function formatFileSize(bytes) {

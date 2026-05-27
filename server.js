@@ -14,12 +14,92 @@ const MAX_IMAGE_DIMENSION = 512; // Resize images before sending to AI
 
 // Settings (in-memory, persisted on change)
 let settings = {
-  model: 'gemma4:e4b',
+  provider: 'ollama', // 'ollama' | 'lmstudio'
+  ollamaUrl: 'http://localhost:11434',
+  lmStudioUrl: 'http://localhost:1234/v1',
+  model: 'llama3.2-vision',
   thumbnailSize: 300,
 };
 
+/**
+ * Detect the best available model, falling back if the configured model is missing.
+ */
+async function detectBestModel() {
+  if (settings.provider === 'lmstudio') {
+    try {
+      const response = await fetch(`${settings.lmStudioUrl}/models`, { signal: AbortSignal.timeout(2000) });
+      if (response.ok) {
+        const data = await response.json();
+        const models = (data.data || []).map(m => m.id);
+        
+        if (models.length > 0 && !models.includes(settings.model)) {
+          console.log(`[Model Auto-Detect] Configured LM Studio model "${settings.model}" not found. Auto-switching to "${models[0]}".`);
+          settings.model = models[0];
+        }
+      }
+    } catch (err) {
+      // LM Studio not reachable, ignore
+    }
+  } else {
+    // Ollama
+    try {
+      const response = await fetch(`${settings.ollamaUrl}/api/tags`, { signal: AbortSignal.timeout(2000) });
+      if (response.ok) {
+        const data = await response.json();
+        const models = (data.models || []).map(m => m.name);
+        
+        // If the current model isn't available, check for alternatives
+        if (models.length > 0 && !models.includes(settings.model)) {
+          // 1. Look for llama3.2-vision
+          if (models.includes('llama3.2-vision')) {
+            console.log(`[Model Auto-Detect] Configured model "${settings.model}" not found. Auto-switching to "llama3.2-vision".`);
+            settings.model = 'llama3.2-vision';
+          } 
+          // 2. Look for any llama3.2-vision model
+          else {
+            const llamaVisionModel = models.find(m => m.startsWith('llama3.2-vision'));
+            if (llamaVisionModel) {
+              console.log(`[Model Auto-Detect] Configured model "${settings.model}" not found. Auto-switching to available llama3.2-vision model "${llamaVisionModel}".`);
+              settings.model = llamaVisionModel;
+            }
+            // 3. Look for gemma4:latest
+            else if (models.includes('gemma4:latest')) {
+              console.log(`[Model Auto-Detect] Configured model "${settings.model}" not found. Auto-switching to "gemma4:latest".`);
+              settings.model = 'gemma4:latest';
+            } 
+            // 4. Look for any gemma4 model
+            else {
+              const gemmaModel = models.find(m => m.startsWith('gemma4'));
+              if (gemmaModel) {
+                console.log(`[Model Auto-Detect] Configured model "${settings.model}" not found. Auto-switching to available gemma4 model "${gemmaModel}".`);
+                settings.model = gemmaModel;
+              }
+              // 5. Look for any non-embedding model
+              else {
+                const nonEmbedModel = models.find(m => !m.includes('embed'));
+                if (nonEmbedModel) {
+                  console.log(`[Model Auto-Detect] Configured model "${settings.model}" not found. Auto-switching to available model "${nonEmbedModel}".`);
+                  settings.model = nonEmbedModel;
+                }
+              }
+            }
+          }
+        }
+      }
+    } catch (err) {
+      // Ollama not reachable, ignore
+    }
+  }
+}
+
+
 app.use(express.json());
 app.use(express.static('public'));
+
+app.use((req, res, next) => {
+  console.log(`[Request] ${req.method} ${req.url}`);
+  next();
+});
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -53,6 +133,7 @@ async function getImageInfo(filePath) {
 async function imageToBase64(filePath) {
   const buffer = await readFile(filePath);
   const resized = await sharp(buffer)
+    .rotate() // Auto-rotate based on EXIF orientation metadata
     .resize(MAX_IMAGE_DIMENSION, MAX_IMAGE_DIMENSION, { fit: 'inside', withoutEnlargement: true })
     .jpeg({ quality: 85 })
     .toBuffer();
@@ -84,7 +165,10 @@ async function writeCache(folder, cache) {
  * Send an image to Ollama for analysis.
  */
 async function analyzeWithOllama(base64Image, model) {
-  const response = await fetch(`${OLLAMA_URL}/api/chat`, {
+  console.log(`[Ollama] Sending image to Ollama using model "${model}"...`);
+  const startTime = Date.now();
+  
+  const response = await fetch(`${settings.ollamaUrl}/api/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -101,13 +185,19 @@ async function analyzeWithOllama(base64Image, model) {
     }),
   });
 
+  const duration = ((Date.now() - startTime) / 1000).toFixed(1);
+  console.log(`[Ollama] Received response from Ollama. Status: ${response.status} (${duration}s)`);
+
   if (!response.ok) {
     const errText = await response.text();
+    console.error(`[Ollama] Request failed with status ${response.status}:`, errText);
     throw new Error(`Ollama error (${response.status}): ${errText}`);
   }
 
   const data = await response.json();
   const rawContent = data.message?.content || '';
+  
+  console.log(`[Ollama] Raw content received (length: ${rawContent.length}). Parsing content...`);
   const analysis = parseAnalysisResponse(rawContent);
 
   if (!analysis) {
@@ -115,7 +205,75 @@ async function analyzeWithOllama(base64Image, model) {
     throw new Error(`Failed to parse AI response: ${rawContent.slice(0, 200)}`);
   }
 
+  console.log(`[Ollama] Successfully parsed analysis. Overall Score: ${analysis.score}`);
   return analysis;
+}
+
+/**
+ * Send an image to LM Studio (OpenAI-compatible) for analysis.
+ */
+async function analyzeWithLMStudio(base64Image, model) {
+  console.log(`[LM Studio] Sending image to LM Studio using model "${model}"...`);
+  const startTime = Date.now();
+  
+  const response = await fetch(`${settings.lmStudioUrl}/chat/completions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: model,
+      messages: [
+        { role: 'system', content: ANALYSIS_SYSTEM_PROMPT },
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: ANALYSIS_USER_PROMPT },
+            {
+              type: 'image_url',
+              image_url: {
+                url: `data:image/jpeg;base64,${base64Image}`
+              }
+            }
+          ]
+        }
+      ],
+      temperature: 0.3,
+      max_tokens: 2048,
+    }),
+  });
+
+  const duration = ((Date.now() - startTime) / 1000).toFixed(1);
+  console.log(`[LM Studio] Received response from LM Studio. Status: ${response.status} (${duration}s)`);
+
+  if (!response.ok) {
+    const errText = await response.text();
+    console.error(`[LM Studio] Request failed with status ${response.status}:`, errText);
+    throw new Error(`LM Studio error (${response.status}): ${errText}`);
+  }
+
+  const data = await response.json();
+  const rawContent = data.choices?.[0]?.message?.content || '';
+  
+  console.log(`[LM Studio] Raw content received (length: ${rawContent.length}). Parsing content...`);
+  const analysis = parseAnalysisResponse(rawContent);
+
+  if (!analysis) {
+    console.error(`[LM Studio Response Parse Failure] Raw Content: "${rawContent}"`);
+    throw new Error(`Failed to parse AI response: ${rawContent.slice(0, 200)}`);
+  }
+
+  console.log(`[LM Studio] Successfully parsed analysis. Overall Score: ${analysis.score}`);
+  return analysis;
+}
+
+/**
+ * Dispatch analysis based on configured provider.
+ */
+async function analyzeWithAI(base64Image, provider, model) {
+  if (provider === 'lmstudio') {
+    return analyzeWithLMStudio(base64Image, model);
+  } else {
+    return analyzeWithOllama(base64Image, model);
+  }
 }
 
 // ─── API Routes ────────────────────────────────────────────────────────────────
@@ -201,7 +359,7 @@ app.post('/api/analyze', async (req, res) => {
 
     // Convert to base64 and analyze
     const base64 = await imageToBase64(resolvedPath);
-    const analysis = await analyzeWithOllama(base64, settings.model);
+    const analysis = await analyzeWithAI(base64, settings.provider, settings.model);
 
     // Cache the result
     const folder = resolve(resolvedPath, '..');
@@ -286,7 +444,7 @@ app.get('/api/analyze-all', async (req, res) => {
         send({ type: 'progress', filename: file, progress: analyzed, total, status: 'analyzing' });
 
         const base64 = await imageToBase64(filePath);
-        const analysis = await analyzeWithOllama(base64, settings.model);
+        const analysis = await analyzeWithAI(base64, settings.provider, settings.model);
 
         // Cache immediately
         cache[file] = analysis;
@@ -345,8 +503,9 @@ app.get('/api/images', async (req, res) => {
     }
 
     if (thumb) {
-      // Serve a resized thumbnail
+      // Serve a resized, rotated thumbnail
       const thumbBuffer = await sharp(resolvedPath)
+        .rotate() // Auto-rotate based on EXIF orientation metadata
         .resize(settings.thumbnailSize, settings.thumbnailSize, { fit: 'cover' })
         .jpeg({ quality: 75 })
         .toBuffer();
@@ -355,8 +514,26 @@ app.get('/api/images', async (req, res) => {
       res.set('Cache-Control', 'public, max-age=86400');
       res.send(thumbBuffer);
     } else {
-      // Serve original file
+      // Serve a rotated and optimized preview image (max 1600px for screen viewing)
       const ext = extname(resolvedPath).toLowerCase();
+      if (IMAGE_EXTENSIONS.has(ext)) {
+        try {
+          const previewBuffer = await sharp(resolvedPath)
+            .rotate() // Auto-rotate based on EXIF orientation metadata
+            .resize(1600, 1600, { fit: 'inside', withoutEnlargement: true })
+            .jpeg({ quality: 85 })
+            .toBuffer();
+
+          res.set('Content-Type', 'image/jpeg');
+          res.set('Cache-Control', 'public, max-age=86400');
+          res.send(previewBuffer);
+          return;
+        } catch (sharpErr) {
+          console.warn('[Sharp Preview Error] Failed to process preview with sharp, falling back to raw stream:', sharpErr);
+        }
+      }
+
+      // Serve original file raw if it's not a standard image or sharp failed
       const mimeTypes = {
         '.jpg': 'image/jpeg',
         '.jpeg': 'image/jpeg',
@@ -382,26 +559,69 @@ app.get('/api/images', async (req, res) => {
 
 /**
  * GET /api/settings
- * Return current settings and Ollama connection status.
+ * Return current settings and local AI connection status.
  */
 app.get('/api/settings', async (_req, res) => {
-  let ollamaOnline = false;
+  let aiOnline = false;
   let availableModels = [];
 
-  try {
-    const response = await fetch(`${OLLAMA_URL}/api/tags`, { signal: AbortSignal.timeout(3000) });
-    if (response.ok) {
-      ollamaOnline = true;
-      const data = await response.json();
-      availableModels = (data.models || []).map(m => m.name);
+  if (settings.provider === 'lmstudio') {
+    try {
+      const response = await fetch(`${settings.lmStudioUrl}/models`, { signal: AbortSignal.timeout(3000) });
+      if (response.ok) {
+        aiOnline = true;
+        const data = await response.json();
+        availableModels = (data.data || []).map(m => m.id);
+        
+        // Auto-detect and align configured model with what is actually available in LM Studio
+        if (availableModels.length > 0 && !availableModels.includes(settings.model)) {
+          settings.model = availableModels[0];
+        }
+      }
+    } catch {
+      // LM Studio not reachable
     }
-  } catch {
-    // Ollama not reachable
+  } else {
+    // Ollama
+    try {
+      const response = await fetch(`${settings.ollamaUrl}/api/tags`, { signal: AbortSignal.timeout(3000) });
+      if (response.ok) {
+        aiOnline = true;
+        const data = await response.json();
+        availableModels = (data.models || []).map(m => m.name);
+        
+        // Auto-detect and align configured model with what is actually available in Ollama
+        if (availableModels.length > 0 && !availableModels.includes(settings.model)) {
+          if (availableModels.includes('llama3.2-vision')) {
+            settings.model = 'llama3.2-vision';
+          } else {
+            const llamaVisionModel = availableModels.find(m => m.startsWith('llama3.2-vision'));
+            if (llamaVisionModel) {
+              settings.model = llamaVisionModel;
+            } else if (availableModels.includes('gemma4:latest')) {
+              settings.model = 'gemma4:latest';
+            } else {
+              const gemmaModel = availableModels.find(m => m.startsWith('gemma4'));
+              if (gemmaModel) {
+                settings.model = gemmaModel;
+              } else {
+                const nonEmbedModel = availableModels.find(m => !m.includes('embed'));
+                if (nonEmbedModel) {
+                  settings.model = nonEmbedModel;
+                }
+              }
+            }
+          }
+        }
+      }
+    } catch {
+      // Ollama not reachable
+    }
   }
 
   res.json({
     ...settings,
-    ollamaOnline,
+    ollamaOnline: aiOnline, // maintain frontend variable name for seamless compatibility
     availableModels,
   });
 });
@@ -411,8 +631,17 @@ app.get('/api/settings', async (_req, res) => {
  * Update settings.
  */
 app.post('/api/settings', (req, res) => {
-  const { model, thumbnailSize } = req.body;
+  const { provider, ollamaUrl, lmStudioUrl, model, thumbnailSize } = req.body;
 
+  if (provider && typeof provider === 'string') {
+    settings.provider = provider;
+  }
+  if (ollamaUrl && typeof ollamaUrl === 'string') {
+    settings.ollamaUrl = ollamaUrl;
+  }
+  if (lmStudioUrl && typeof lmStudioUrl === 'string') {
+    settings.lmStudioUrl = lmStudioUrl;
+  }
   if (model && typeof model === 'string') {
     settings.model = model;
   }
@@ -463,17 +692,23 @@ app.delete('/api/cache', async (req, res) => {
 
 // ─── Start Server ──────────────────────────────────────────────────────────────
 
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
+  await detectBestModel();
+  const providerLabel = settings.provider === 'lmstudio' ? 'LM Studio' : 'Ollama';
+  const providerUrl = settings.provider === 'lmstudio' ? settings.lmStudioUrl : settings.ollamaUrl;
+  
   console.log('');
   console.log('  ┌──────────────────────────────────────────┐');
   console.log('  │                                          │');
   console.log('  │   📸  Picture Scout                      │');
   console.log('  │   AI-Powered Photo Curation              │');
   console.log('  │                                          │');
-  console.log(`  │   Local:  http://localhost:${PORT}            │`);
-  console.log(`  │   Ollama: ${OLLAMA_URL}       │`);
-  console.log(`  │   Model:  ${settings.model.padEnd(27)}│`);
+  console.log(`  │   Local:    http://localhost:${PORT}          │`);
+  console.log(`  │   Provider: ${providerLabel.padEnd(27)}│`);
+  console.log(`  │   Endpoint: ${providerUrl.slice(0, 27).padEnd(27)}│`);
+  console.log(`  │   Model:    ${settings.model.slice(0, 27).padEnd(27)}│`);
   console.log('  │                                          │');
   console.log('  └──────────────────────────────────────────┘');
   console.log('');
 });
+// Trigger reload after downloading llama3.2-vision

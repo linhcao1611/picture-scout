@@ -1152,7 +1152,8 @@ input[type="range"]::-webkit-slider-thumb:hover {
 }
 
 .form-group input[type="text"],
-.form-group input[type="number"] {
+.form-group input[type="number"],
+.form-group select {
   padding: 10px 14px;
   background: var(--bg-input);
   border: 1px solid var(--border-subtle);
@@ -1163,7 +1164,17 @@ input[type="range"]::-webkit-slider-thumb:hover {
   outline: none;
   transition: border-color var(--transition-fast);
 }
-.form-group input:focus {
+.form-group select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2394a3b8' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  padding-right: 36px;
+  cursor: pointer;
+}
+.form-group input:focus,
+.form-group select:focus {
   border-color: var(--border-accent);
 }
 

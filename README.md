@@ -2,7 +2,7 @@
 
 Picture Scout is a premium, **100% local AI-powered photo curation application** designed to help photographers and hobbyists quickly scout, grade, and curate top picks from their photo folders. 
 
-Powered by **Gemma 4** running locally via **Ollama**, and built with a gorgeous **dark glassmorphism design system** in Vanilla CSS/JS. No data ever leaves your computer, and no paid APIs are required.
+Powered by Meta's **Llama 3.2 Vision** model running locally via **Ollama**, and built with a gorgeous **dark glassmorphism design system** in Vanilla CSS/JS. No data ever leaves your computer, and no paid APIs are required.
 
 ---
 
@@ -24,7 +24,7 @@ Powered by **Gemma 4** running locally via **Ollama**, and built with a gorgeous
 - **Frontend**: Vanilla HTML5, CSS3 (Glassmorphism layout, smooth CSS animations), Vanilla JavaScript (no framework overhead).
 - **Backend**: Node.js, Express.js.
 - **Image Processing**: Sharp (resizes images down to 512px before sending to the model to save VRAM and achieve 4x faster execution).
-- **AI Engine**: Ollama (configured to run `gemma4:e4b` locally with a large 2048 context budget to allow full reasoning/thinking cycles).
+- **AI Engine**: Ollama (configured to run Meta's `llama3.2-vision` locally with a large 2048 context budget to allow full reasoning/thinking cycles).
 
 ---
 
@@ -32,9 +32,9 @@ Powered by **Gemma 4** running locally via **Ollama**, and built with a gorgeous
 
 ### 1. Prerequisites
 - Install [Ollama](https://ollama.com).
-- Download Gemma 4 (approx. 8B parameters, Q4 quantization):
+- Download Llama 3.2 Vision (Meta/Facebook's vision model, approx. 11B parameters):
   ```bash
-  ollama pull gemma4:e4b
+  ollama pull llama3.2-vision
   ```
 - Make sure Ollama is running (`ollama serve`).
 
