@@ -18,10 +18,20 @@
       provider: 'lmstudio',
       ollamaUrl: 'http://localhost:11434',
       lmStudioUrl: 'http://localhost:1234/v1',
+      openaiKey: '',
+      anthropicKey: '',
+      geminiKey: '',
       model: 'gemma-4',
       thumbnailSize: 300,
     },
-    availableModels: [],      // available models from Ollama
+    availableModels: [],      // available models from backend or static lists
+  };
+
+  // Predefined models for cloud providers
+  const cloudModels = {
+    openai: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo'],
+    anthropic: ['claude-3-5-sonnet-20240620', 'claude-3-opus-20240229', 'claude-3-haiku-20240307'],
+    gemini: ['gemini-1.5-pro', 'gemini-1.5-flash']
   };
 
   const TOP_PICK_THRESHOLD = 8.0;
@@ -78,6 +88,12 @@
     settingLmStudioUrl: $('#setting-lmstudio-url'),
     settingOllamaUrlContainer: $('#setting-ollama-url-container'),
     settingLmStudioUrlContainer: $('#setting-lmstudio-url-container'),
+    settingOpenaiKeyContainer: $('#setting-openai-key-container'),
+    settingAnthropicKeyContainer: $('#setting-anthropic-key-container'),
+    settingGeminiKeyContainer: $('#setting-gemini-key-container'),
+    settingOpenaiKey: $('#setting-openai-key'),
+    settingAnthropicKey: $('#setting-anthropic-key'),
+    settingGeminiKey: $('#setting-gemini-key'),
     settingModelLabel: $('#setting-model-label'),
     settingModelHint: $('#setting-model-hint'),
     settingModel: $('#setting-model'),
@@ -154,16 +170,25 @@
       state.settings.provider = data.provider || 'ollama';
       state.settings.ollamaUrl = data.ollamaUrl || 'http://localhost:11434';
       state.settings.lmStudioUrl = data.lmStudioUrl || 'http://localhost:1234/v1';
+      state.settings.openaiKey = data.openaiKey || '';
+      state.settings.anthropicKey = data.anthropicKey || '';
+      state.settings.geminiKey = data.geminiKey || '';
       state.settings.model = data.model || 'gemma-4';
       state.settings.thumbnailSize = data.thumbnailSize || 300;
 
-      const providerLabel = state.settings.provider === 'lmstudio' ? 'LM Studio' : 'Ollama';
+      const providerLabels = {
+        lmstudio: 'LM Studio', ollama: 'Ollama', openai: 'OpenAI',
+        anthropic: 'Anthropic', gemini: 'Google Gemini'
+      };
+      const providerLabel = providerLabels[state.settings.provider] || 'Ollama';
 
-      if (data.ollamaOnline) {
+      if (['openai', 'anthropic', 'gemini'].includes(state.settings.provider)) {
+        dom.connectionStatus.className = 'connection-status online';
+        dom.statusLabel.textContent = `${providerLabel} (Cloud)`;
+        state.availableModels = cloudModels[state.settings.provider];
+      } else if (data.ollamaOnline) {
         dom.connectionStatus.className = 'connection-status online';
         dom.statusLabel.textContent = `${providerLabel} Online`;
-        
-        // Sync models
         state.availableModels = data.availableModels || [];
       } else {
         dom.connectionStatus.className = 'connection-status offline';
@@ -179,16 +204,26 @@
 
   // Sync settings UI fields based on provider value
   function syncProviderFields(provider) {
+    dom.settingOllamaUrlContainer.classList.add('hidden');
+    dom.settingLmStudioUrlContainer.classList.add('hidden');
+    dom.settingOpenaiKeyContainer.classList.add('hidden');
+    dom.settingAnthropicKeyContainer.classList.add('hidden');
+    dom.settingGeminiKeyContainer.classList.add('hidden');
+
     if (provider === 'lmstudio') {
-      dom.settingOllamaUrlContainer.classList.add('hidden');
       dom.settingLmStudioUrlContainer.classList.remove('hidden');
       dom.settingModelLabel.textContent = 'LM Studio Model';
       dom.settingModelHint.textContent = 'The active/loaded vision model in LM Studio.';
-    } else {
+    } else if (provider === 'ollama') {
       dom.settingOllamaUrlContainer.classList.remove('hidden');
-      dom.settingLmStudioUrlContainer.classList.add('hidden');
       dom.settingModelLabel.textContent = 'Ollama Model';
       dom.settingModelHint.textContent = 'The vision model in Ollama to use for analysis.';
+    } else {
+      if (provider === 'openai') dom.settingOpenaiKeyContainer.classList.remove('hidden');
+      if (provider === 'anthropic') dom.settingAnthropicKeyContainer.classList.remove('hidden');
+      if (provider === 'gemini') dom.settingGeminiKeyContainer.classList.remove('hidden');
+      dom.settingModelLabel.textContent = 'Cloud Model';
+      dom.settingModelHint.textContent = 'Select or type a cloud vision model.';
     }
   }
 
@@ -199,6 +234,9 @@
       provider: provider,
       ollamaUrl: dom.settingOllamaUrl.value.trim(),
       lmStudioUrl: dom.settingLmStudioUrl.value.trim(),
+      openaiKey: dom.settingOpenaiKey.value.trim(),
+      anthropicKey: dom.settingAnthropicKey.value.trim(),
+      geminiKey: dom.settingGeminiKey.value.trim(),
     };
 
     try {
@@ -821,6 +859,14 @@
     dom.settingProvider.value = state.settings.provider || 'ollama';
     dom.settingOllamaUrl.value = state.settings.ollamaUrl || 'http://localhost:11434';
     dom.settingLmStudioUrl.value = state.settings.lmStudioUrl || 'http://localhost:1234/v1';
+    dom.settingOpenaiKey.value = state.settings.openaiKey || '';
+    dom.settingAnthropicKey.value = state.settings.anthropicKey || '';
+    dom.settingGeminiKey.value = state.settings.geminiKey || '';
+
+    // If a cloud provider is selected, populate models right away
+    if (cloudModels[dom.settingProvider.value]) {
+      state.availableModels = cloudModels[dom.settingProvider.value];
+    }
 
     syncProviderFields(dom.settingProvider.value);
     renderModelSelectOptions();
@@ -842,6 +888,9 @@
     state.settings.provider = dom.settingProvider.value;
     state.settings.ollamaUrl = dom.settingOllamaUrl.value.trim() || 'http://localhost:11434';
     state.settings.lmStudioUrl = dom.settingLmStudioUrl.value.trim() || 'http://localhost:1234/v1';
+    state.settings.openaiKey = dom.settingOpenaiKey.value.trim();
+    state.settings.anthropicKey = dom.settingAnthropicKey.value.trim();
+    state.settings.geminiKey = dom.settingGeminiKey.value.trim();
     state.settings.model = chosenModel || 'gemma-4';
     state.settings.thumbnailSize = parseInt(dom.settingThumbSize.value, 10) || 300;
 

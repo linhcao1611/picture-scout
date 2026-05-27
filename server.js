@@ -3,6 +3,7 @@ import { readdir, stat, readFile, writeFile, unlink, access } from 'node:fs/prom
 import { join, extname, basename, resolve } from 'node:path';
 import { createReadStream } from 'node:fs';
 import sharp from 'sharp';
+import { GoogleAuth } from 'google-auth-library';
 import { ANALYSIS_SYSTEM_PROMPT, ANALYSIS_USER_PROMPT, parseAnalysisResponse } from './prompts.js';
 
 const app = express();
@@ -14,9 +15,12 @@ const MAX_IMAGE_DIMENSION = 512; // Resize images before sending to AI
 
 // Settings (in-memory, persisted on change)
 let settings = {
-  provider: 'lmstudio', // 'ollama' | 'lmstudio'
+  provider: 'lmstudio', // 'ollama' | 'lmstudio' | 'openai' | 'anthropic' | 'gemini'
   ollamaUrl: 'http://localhost:11434',
   lmStudioUrl: 'http://localhost:1234/v1',
+  openaiKey: '',
+  anthropicKey: '',
+  geminiKey: '',
   model: 'gemma-4',
   thumbnailSize: 300,
 };
@@ -267,13 +271,184 @@ async function analyzeWithLMStudio(base64Image, model) {
 }
 
 /**
+ * Send an image to OpenAI for analysis.
+ */
+async function analyzeWithOpenAI(base64Image, model) {
+  if (!settings.openaiKey) throw new Error("OpenAI API key is required");
+  console.log(`[OpenAI] Sending image using model "${model}"...`);
+  const startTime = Date.now();
+  
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${settings.openaiKey}`
+    },
+    body: JSON.stringify({
+      model: model,
+      messages: [
+        { role: 'system', content: ANALYSIS_SYSTEM_PROMPT },
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: ANALYSIS_USER_PROMPT },
+            {
+              type: 'image_url',
+              image_url: { url: `data:image/jpeg;base64,${base64Image}` }
+            }
+          ]
+        }
+      ],
+      temperature: 0.3,
+      max_tokens: 2048,
+    }),
+  });
+
+  const duration = ((Date.now() - startTime) / 1000).toFixed(1);
+  console.log(`[OpenAI] Status: ${response.status} (${duration}s)`);
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`OpenAI error (${response.status}): ${errText}`);
+  }
+
+  const data = await response.json();
+  const rawContent = data.choices?.[0]?.message?.content || '';
+  const analysis = parseAnalysisResponse(rawContent);
+
+  if (!analysis) throw new Error(`Failed to parse AI response: ${rawContent.slice(0, 200)}`);
+  return analysis;
+}
+
+/**
+ * Send an image to Anthropic for analysis.
+ */
+async function analyzeWithAnthropic(base64Image, model) {
+  if (!settings.anthropicKey) throw new Error("Anthropic API key is required");
+  console.log(`[Anthropic] Sending image using model "${model}"...`);
+  const startTime = Date.now();
+  
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': settings.anthropicKey,
+      'anthropic-version': '2023-06-01'
+    },
+    body: JSON.stringify({
+      model: model,
+      system: ANALYSIS_SYSTEM_PROMPT,
+      messages: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'image',
+              source: { type: 'base64', media_type: 'image/jpeg', data: base64Image }
+            },
+            { type: 'text', text: ANALYSIS_USER_PROMPT }
+          ]
+        }
+      ],
+      temperature: 0.3,
+      max_tokens: 2048,
+    }),
+  });
+
+  const duration = ((Date.now() - startTime) / 1000).toFixed(1);
+  console.log(`[Anthropic] Status: ${response.status} (${duration}s)`);
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Anthropic error (${response.status}): ${errText}`);
+  }
+
+  const data = await response.json();
+  const rawContent = data.content?.[0]?.text || '';
+  const analysis = parseAnalysisResponse(rawContent);
+
+  if (!analysis) throw new Error(`Failed to parse AI response: ${rawContent.slice(0, 200)}`);
+  return analysis;
+}
+
+/**
+ * Send an image to Google Gemini for analysis.
+ * Uses API key if provided, otherwise falls back to Application Default Credentials.
+ */
+async function analyzeWithGemini(base64Image, model) {
+  console.log(`[Gemini] Sending image using model "${model}"...`);
+  const startTime = Date.now();
+  
+  let url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+  let headers = { 'Content-Type': 'application/json' };
+  
+  if (settings.geminiKey) {
+    // Explicit API Key provided
+    url += `?key=${settings.geminiKey}`;
+  } else {
+    // Fallback to ADC using google-auth-library
+    console.log('[Gemini] No API key provided, attempting Google Application Default Credentials login...');
+    try {
+      const auth = new GoogleAuth({
+        scopes: 'https://www.googleapis.com/auth/generative-language.retriever'
+      });
+      const client = await auth.getClient();
+      const token = await client.getAccessToken();
+      if (!token.token) throw new Error('Failed to retrieve access token from GoogleAuth');
+      headers['Authorization'] = `Bearer ${token.token}`;
+    } catch (authErr) {
+      throw new Error('No Gemini API key provided, and failed to login via Google ADC: ' + authErr.message);
+    }
+  }
+  
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: headers,
+    body: JSON.stringify({
+      system_instruction: { parts: [{ text: ANALYSIS_SYSTEM_PROMPT }] },
+      contents: [
+        {
+          role: 'user',
+          parts: [
+            { text: ANALYSIS_USER_PROMPT },
+            {
+              inline_data: { mime_type: 'image/jpeg', data: base64Image }
+            }
+          ]
+        }
+      ],
+      generationConfig: { temperature: 0.3 }
+    }),
+  });
+
+  const duration = ((Date.now() - startTime) / 1000).toFixed(1);
+  console.log(`[Gemini] Status: ${response.status} (${duration}s)`);
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Gemini error (${response.status}): ${errText}`);
+  }
+
+  const data = await response.json();
+  const rawContent = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  const analysis = parseAnalysisResponse(rawContent);
+
+  if (!analysis) throw new Error(`Failed to parse AI response: ${rawContent.slice(0, 200)}`);
+  return analysis;
+}
+
+/**
  * Dispatch analysis based on configured provider.
  */
 async function analyzeWithAI(base64Image, provider, model) {
-  if (provider === 'lmstudio') {
-    return analyzeWithLMStudio(base64Image, model);
-  } else {
-    return analyzeWithOllama(base64Image, model);
+  switch (provider) {
+    case 'lmstudio': return analyzeWithLMStudio(base64Image, model);
+    case 'openai': return analyzeWithOpenAI(base64Image, model);
+    case 'anthropic': return analyzeWithAnthropic(base64Image, model);
+    case 'gemini': return analyzeWithGemini(base64Image, model);
+    case 'ollama':
+    default:
+      return analyzeWithOllama(base64Image, model);
   }
 }
 
@@ -632,20 +807,16 @@ app.get('/api/settings', async (_req, res) => {
  * Update settings.
  */
 app.post('/api/settings', (req, res) => {
-  const { provider, ollamaUrl, lmStudioUrl, model, thumbnailSize } = req.body;
+  const { provider, ollamaUrl, lmStudioUrl, openaiKey, anthropicKey, geminiKey, model, thumbnailSize } = req.body;
 
-  if (provider && typeof provider === 'string') {
-    settings.provider = provider;
-  }
-  if (ollamaUrl && typeof ollamaUrl === 'string') {
-    settings.ollamaUrl = ollamaUrl;
-  }
-  if (lmStudioUrl && typeof lmStudioUrl === 'string') {
-    settings.lmStudioUrl = lmStudioUrl;
-  }
-  if (model && typeof model === 'string') {
-    settings.model = model;
-  }
+  if (provider && typeof provider === 'string') settings.provider = provider;
+  if (ollamaUrl && typeof ollamaUrl === 'string') settings.ollamaUrl = ollamaUrl;
+  if (lmStudioUrl && typeof lmStudioUrl === 'string') settings.lmStudioUrl = lmStudioUrl;
+  if (typeof openaiKey === 'string') settings.openaiKey = openaiKey;
+  if (typeof anthropicKey === 'string') settings.anthropicKey = anthropicKey;
+  if (typeof geminiKey === 'string') settings.geminiKey = geminiKey;
+  if (model && typeof model === 'string') settings.model = model;
+  
   if (thumbnailSize && typeof thumbnailSize === 'number' && thumbnailSize >= 100 && thumbnailSize <= 800) {
     settings.thumbnailSize = thumbnailSize;
   }
@@ -695,8 +866,18 @@ app.delete('/api/cache', async (req, res) => {
 
 app.listen(PORT, async () => {
   await detectBestModel();
-  const providerLabel = settings.provider === 'lmstudio' ? 'LM Studio' : 'Ollama';
-  const providerUrl = settings.provider === 'lmstudio' ? settings.lmStudioUrl : settings.ollamaUrl;
+  const providerLabels = {
+    lmstudio: 'LM Studio',
+    ollama: 'Ollama',
+    openai: 'OpenAI',
+    anthropic: 'Anthropic',
+    gemini: 'Google Gemini'
+  };
+  const providerLabel = providerLabels[settings.provider] || 'Ollama';
+  let providerUrl = '';
+  if (settings.provider === 'lmstudio') providerUrl = settings.lmStudioUrl;
+  else if (settings.provider === 'ollama') providerUrl = settings.ollamaUrl;
+  else providerUrl = 'Cloud API';
   
   console.log('');
   console.log('  ┌──────────────────────────────────────────┐');

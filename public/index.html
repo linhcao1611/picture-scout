@@ -216,8 +216,11 @@
           <select id="setting-provider">
             <option value="ollama">Ollama</option>
             <option value="lmstudio">LM Studio (OpenAI Compatible)</option>
+            <option value="openai">OpenAI</option>
+            <option value="anthropic">Anthropic</option>
+            <option value="gemini">Google Gemini</option>
           </select>
-          <p class="form-hint">Select the local platform hosting your vision model.</p>
+          <p class="form-hint">Select the platform hosting your vision model.</p>
         </div>
         <div class="form-group" id="setting-ollama-url-container">
           <label for="setting-ollama-url">Ollama Server URL</label>
@@ -226,6 +229,19 @@
         <div class="form-group hidden" id="setting-lmstudio-url-container">
           <label for="setting-lmstudio-url">LM Studio Server URL</label>
           <input type="text" id="setting-lmstudio-url" value="http://localhost:1234/v1" placeholder="http://localhost:1234/v1" spellcheck="false" />
+        </div>
+        <div class="form-group hidden" id="setting-openai-key-container">
+          <label for="setting-openai-key">OpenAI API Key</label>
+          <input type="password" id="setting-openai-key" placeholder="sk-..." spellcheck="false" />
+        </div>
+        <div class="form-group hidden" id="setting-anthropic-key-container">
+          <label for="setting-anthropic-key">Anthropic API Key</label>
+          <input type="password" id="setting-anthropic-key" placeholder="sk-ant-..." spellcheck="false" />
+        </div>
+        <div class="form-group hidden" id="setting-gemini-key-container">
+          <label for="setting-gemini-key">Google Gemini API Key</label>
+          <input type="password" id="setting-gemini-key" placeholder="AIzaSy..." spellcheck="false" />
+          <p class="form-hint" style="margin-top: 4px;">Leave blank to attempt login via local Google CLI credentials.</p>
         </div>
         <div class="form-group">
           <label for="setting-model" id="setting-model-label">Model</label>

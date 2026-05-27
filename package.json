@@ -11,6 +11,7 @@
   "dependencies": {
     "express": "^5.1.0",
     "glob": "^11.0.0",
+    "google-auth-library": "^10.6.2",
     "sharp": "^0.33.0"
   }
 }
